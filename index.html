@@ -1,0 +1,194 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Sonification POC</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; background-color: #f8f9fa; color: #212529; margin: 0; padding: 2rem; }
+        .container { max-width: 900px; margin: auto; background: #fff; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1, h2 { color: #343a40; border-bottom: 2px solid #dee2e6; padding-bottom: 0.5rem; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start; }
+        .box { border: 1px solid #ccc; padding: 1rem; border-radius: 4px; min-height: 200px; }
+        .box h2 { margin-top: 0; }
+        canvas { max-width: 100%; height: auto; display: block; background-image: linear-gradient(45deg, #eee 25%, transparent 25%), linear-gradient(-45deg, #eee 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #eee 75%), linear-gradient(-45deg, transparent 75%, #eee 75%); background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px; }
+        button, input[type="file"] { font-size: 1rem; padding: 0.5rem 1rem; border-radius: 4px; border: 1px solid #007bff; cursor: pointer; transition: background-color 0.2s; }
+        input[type="file"] { border-style: dashed; }
+        button { background-color: #007bff; color: white; }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; border-color: #6c757d; cursor: not-allowed; }
+        #download-btn { background-color: #28a745; border-color: #28a745; }
+        #download-btn:hover { background-color: #218838; }
+        .status { margin-top: 1rem; padding: 1rem; background-color: #e9ecef; border-radius: 4px; font-family: monospace; white-space: pre-wrap; max-height: 200px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Image Sonification & Filtering POC</h1>
+        <p>This application demonstrates the process of converting image pixel data to an audio stream, applying an FFmpeg filter, and re-encoding it back into an image.</p>
+        
+        <hr>
+
+        <div>
+            <h2>1. Upload an Image</h2>
+            <input type="file" id="image-upload" accept="image/jpeg, image/png">
+        </div>
+
+        <div class="grid" style="margin-top: 2rem;">
+            <div class="box">
+                <h2>Original Image</h2>
+                <canvas id="original-canvas"></canvas>
+            </div>
+            <div class="box">
+                <h2>Filtered Image</h2>
+                <canvas id="filtered-canvas"></canvas>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin: 2rem 0;">
+             <button id="process-btn" disabled>Process Image with FFmpeg 'aecho' Filter</button>
+             <button id="download-btn" style="display:none;">Download Result</button>
+        </div>
+
+        <div class="status" id="status-log">
+            <strong>Status Log:</strong><br>
+            Awaiting image upload...
+        </div>
+    </div>
+
+    <script>
+        const uploadInput = document.getElementById('image-upload');
+        const processBtn = document.getElementById('process-btn');
+        const downloadBtn = document.getElementById('download-btn');
+        const originalCanvas = document.getElementById('original-canvas');
+        const filteredCanvas = document.getElementById('filtered-canvas');
+        const statusLog = document.getElementById('status-log');
+
+        let originalImageData = null;
+        let originalWidth = 0;
+        let originalHeight = 0;
+
+        function log(message) {
+            console.log(message);
+            statusLog.innerHTML += `
+&gt; ${message}`;
+            statusLog.scrollTop = statusLog.scrollHeight;
+        }
+
+        uploadInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) {
+                log("File selection cancelled.");
+                return;
+            }
+            if (!['image/jpeg', 'image/png'].includes(file.type)) {
+                alert('Invalid file type. Please upload a JPEG or PNG image.');
+                log("Error: Invalid file type selected.");
+                return;
+            }
+
+            log(`File selected: ${file.name} (${file.type})`);
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    log("Image loaded into memory.");
+                    originalWidth = img.width;
+                    originalHeight = img.height;
+                    
+                    originalCanvas.width = originalWidth;
+                    originalCanvas.height = originalHeight;
+                    const ctx = originalCanvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    log(`Drawn to canvas (${originalWidth}x${originalHeight}).`);
+
+                    originalImageData = ctx.getImageData(0, 0, originalWidth, originalHeight);
+                    log(`Extracted ${originalImageData.data.length} bytes of raw pixel data (Uint8ClampedArray).`);
+
+                    filteredCanvas.width = originalWidth;
+                    filteredCanvas.height = originalHeight;
+                    filteredCanvas.getContext('2d').clearRect(0, 0, originalWidth, originalHeight);
+                    downloadBtn.style.display = 'none';
+
+                    processBtn.disabled = false;
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+        
+        processBtn.addEventListener('click', async () => {
+            if (!originalImageData) {
+                alert("Please upload an image first.");
+                return;
+            }
+
+            processBtn.disabled = true;
+            processBtn.textContent = "Processing...";
+            log("--- Starting FFmpeg processing ---");
+            log("Sending pixel data to server...");
+
+            try {
+                const pixelDataBlob = new Blob([originalImageData.data]);
+                
+                const formData = new FormData();
+                formData.append('pixel_data', pixelDataBlob, 'image.raw');
+                formData.append('width', originalWidth);
+                formData.append('height', originalHeight);
+
+                const response = await fetch('/process-image/', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Server error: ${response.status} - ${errorText}`);
+                }
+
+                log("Received processed pixel data from server.");
+                const processedPixelArrayBuffer = await response.arrayBuffer();
+                const processedPixelData = new Uint8ClampedArray(processedPixelArrayBuffer);
+
+                reconstructImage(processedPixelData);
+
+            } catch (error) {
+                console.error("Processing failed:", error);
+                log(`Error: ${error.message}. Check the server terminal for more details.`);
+                alert("An error occurred during processing. Please check the console and server logs.");
+            } finally {
+                processBtn.disabled = false;
+                processBtn.textContent = "Process Image with FFmpeg 'aecho' Filter";
+            }
+        });
+
+        function reconstructImage(pixelData) {
+            log("Reconstructing image from processed data...");
+            const ctx = filteredCanvas.getContext('2d');
+
+            const newImageData = ctx.createImageData(originalWidth, originalHeight);
+            
+            newImageData.data.set(pixelData);
+            log("Pixel data copied to new ImageData object.");
+
+            ctx.putImageData(newImageData, 0, 0);
+            log("Filtered image drawn to canvas.");
+            
+            downloadBtn.style.display = 'inline-block';
+        }
+
+        downloadBtn.addEventListener('click', () => {
+            const dataUrl = filteredCanvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = 'filtered-image.png';
+            link.href = dataUrl;
+            link.click();
+            log("Resulting image downloaded as 'filtered-image.png'.");
+        });
+
+    </script>
+</body>
+</html>
