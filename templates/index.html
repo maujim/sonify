@@ -1,0 +1,2094 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Sonification POC</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #4facfe 75%, #00f2fe 100%);
+            background-attachment: fixed;
+            color: #ffffff;
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            width: 100%;
+            background: rgba(20, 20, 40, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 3rem;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(102, 126, 234, 0.3), 0 0 100px rgba(240, 147, 251, 0.1);
+            border: 1px solid rgba(240, 147, 251, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+        .container::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(102, 126, 234, 0.1), transparent, rgba(240, 147, 251, 0.1));
+            animation: glitch 10s linear infinite;
+        }
+        @keyframes glitch {
+            0% { transform: translate(0, 0); }
+            20% { transform: translate(-2px, 2px); }
+            40% { transform: translate(-2px, -2px); }
+            60% { transform: translate(2px, 2px); }
+            80% { transform: translate(2px, -2px); }
+            100% { transform: translate(0, 0); }
+        }
+        h1 {
+            color: #ffffff;
+            font-size: 3rem;
+            font-weight: 700;
+            margin: 0 0 2rem 0;
+            text-align: center;
+            text-shadow: 0 0 30px rgba(240, 147, 251, 0.5), 0 0 60px rgba(79, 172, 254, 0.3);
+            background: linear-gradient(90deg, #f093fb, #4facfe, #00f2fe, #f093fb);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shine 3s linear infinite;
+        }
+        @keyframes shine {
+            to { background-position: 200% center; }
+        }
+        h2 {
+            color: #ffffff;
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 0 0 1rem 0;
+            text-shadow: 0 0 20px rgba(240, 147, 251, 0.3);
+        }
+        .main-grid {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 3rem;
+            align-items: start;
+            position: relative;
+            z-index: 1;
+        }
+        .controls {
+            background: rgba(30, 30, 50, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(240, 147, 251, 0.3);
+            border-radius: 16px;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+        .image-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+        .box {
+            border: 1px solid rgba(240, 147, 251, 0.3);
+            padding: 1.5rem;
+            border-radius: 16px;
+            background: rgba(30, 30, 50, 0.6);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+        .box h2 { margin-top: 0; }
+        canvas {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            background: linear-gradient(45deg, rgba(102, 126, 234, 0.1) 25%, transparent 25%), linear-gradient(-45deg, rgba(240, 147, 251, 0.1) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(79, 172, 254, 0.1) 75%), linear-gradient(-45deg, transparent 75%, rgba(0, 242, 254, 0.1) 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            border-radius: 12px;
+            border: 1px solid rgba(240, 147, 251, 0.2);
+        }
+        .control-group { display: flex; flex-direction: column; gap: 0.75rem; }
+        label {
+            font-weight: 600;
+            color: #ffffff;
+            font-size: 0.95rem;
+            text-shadow: 0 0 10px rgba(240, 147, 251, 0.3);
+        }
+        select, input[type="file"] {
+            font-size: 0.95rem;
+            padding: 0.75rem;
+            border-radius: 12px;
+            border: 1px solid rgba(240, 147, 251, 0.3);
+            background: rgba(20, 20, 40, 0.8);
+            color: #ffffff;
+            transition: all 0.3s;
+            backdrop-filter: blur(10px);
+        }
+        select:focus, input[type="file"]:focus {
+            outline: none;
+            border-color: #f093fb;
+            box-shadow: 0 0 20px rgba(240, 147, 251, 0.3), 0 0 40px rgba(79, 172, 254, 0.1);
+            transform: translateY(-2px);
+        }
+        select option {
+            background: #1a1a2e;
+            color: #ffffff;
+        }
+        button {
+            font-size: 0.95rem;
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: linear-gradient(135deg, #f093fb, #4facfe);
+            color: white;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 5px 20px rgba(240, 147, 251, 0.3), 0 0 30px rgba(79, 172, 254, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+        button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+        button:hover::before {
+            left: 100%;
+        }
+        button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 30px rgba(240, 147, 251, 0.4), 0 0 50px rgba(79, 172, 254, 0.3);
+        }
+        button:disabled {
+            background: linear-gradient(135deg, #4a5568, #2d3748);
+            border-color: transparent;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        #download-btn {
+            background: linear-gradient(135deg, #00f2fe, #4facfe);
+            border-color: transparent;
+        }
+        #download-btn:hover {
+            box-shadow: 0 8px 30px rgba(0, 242, 254, 0.4), 0 0 50px rgba(79, 172, 254, 0.3);
+        }
+        .param-group {
+            margin-top: 1rem;
+            border-top: 1px solid rgba(240, 147, 251, 0.2);
+            padding-top: 1rem;
+        }
+        .param-group label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.875rem;
+        }
+        .param-group input[type="range"] {
+            width: 100%;
+            margin-top: 0.25rem;
+            appearance: none;
+            height: 6px;
+            background: linear-gradient(90deg, #f093fb, #4facfe);
+            border-radius: 3px;
+            outline: none;
+        }
+        .param-group input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #ffffff;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(240, 147, 251, 0.5);
+        }
+        .status {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: rgba(20, 20, 40, 0.8);
+            border: 1px solid rgba(240, 147, 251, 0.3);
+            border-radius: 12px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 0.875rem;
+            color: #00f2fe;
+            backdrop-filter: blur(10px);
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Debug Panel Styles */
+        .debug-panel {
+            margin-top: 2rem;
+            border: 1px solid rgba(240, 147, 251, 0.3);
+            border-radius: 16px;
+            background: rgba(30, 30, 50, 0.8);
+            backdrop-filter: blur(20px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            position: relative;
+            z-index: 1;
+        }
+        .debug-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(20, 20, 40, 0.8);
+            border-bottom: 1px solid rgba(240, 147, 251, 0.2);
+            border-radius: 16px 16px 0 0;
+            padding: 1rem 2rem;
+        }
+        .debug-tabs { display: flex; }
+        .debug-controls { display: flex; align-items: center; }
+        .debug-toggle-btn {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+            border: 1px solid rgba(240, 147, 251, 0.3);
+            border-radius: 8px;
+            background: rgba(30, 30, 50, 0.8);
+            color: #ffffff;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+            backdrop-filter: blur(10px);
+        }
+        .debug-toggle-btn:hover {
+            background: rgba(240, 147, 251, 0.1);
+            border-color: #f093fb;
+            box-shadow: 0 0 15px rgba(240, 147, 251, 0.3);
+        }
+        .debug-toggle-btn.disabled {
+            background: rgba(74, 85, 104, 0.8);
+            border-color: rgba(74, 85, 104, 0.5);
+            color: #656d76;
+        }
+        .debug-tab {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.7);
+            transition: all 0.3s;
+            border-right: 1px solid rgba(240, 147, 251, 0.2);
+        }
+        .debug-tab:last-child { border-right: none; }
+        .debug-tab:hover {
+            background: rgba(240, 147, 251, 0.1);
+            color: #ffffff;
+            text-shadow: 0 0 10px rgba(240, 147, 251, 0.5);
+        }
+        .debug-tab.active {
+            background: rgba(240, 147, 251, 0.2);
+            color: #f093fb;
+            border-bottom: 2px solid #f093fb;
+            margin-bottom: -1px;
+            text-shadow: 0 0 15px rgba(240, 147, 251, 0.8);
+        }
+        .debug-content { padding: 2rem; }
+        .debug-tab-content { display: none; }
+        .debug-tab-content.active { display: block; }
+        .debug-tab-content h3 {
+            margin-top: 0;
+            color: #ffffff;
+            font-size: 1.25rem;
+            font-weight: 600;
+            text-shadow: 0 0 20px rgba(240, 147, 251, 0.3);
+        }
+
+        /* Data Flow Styles */
+        .pipeline-container {
+            margin: 1.5rem 0;
+            border: 1px solid rgba(240, 147, 251, 0.3);
+            border-radius: 12px;
+            background: rgba(20, 20, 40, 0.6);
+            backdrop-filter: blur(10px);
+            padding: 1.5rem;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+        .data-stages {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        .stage-card {
+            background: rgba(30, 30, 50, 0.8);
+            border: 1px solid rgba(240, 147, 251, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s;
+        }
+        .stage-card:hover {
+            border-color: #f093fb;
+            box-shadow: 0 0 20px rgba(240, 147, 251, 0.2);
+            transform: translateY(-2px);
+        }
+        .stage-card h4 {
+            margin: 0 0 0.75rem 0;
+            font-size: 0.95rem;
+            color: #ffffff;
+            font-weight: 600;
+            text-shadow: 0 0 10px rgba(240, 147, 251, 0.3);
+        }
+        .stage-info {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+            font-size: 0.875rem;
+        }
+        .data-size {
+            font-weight: 600;
+            color: #00f2fe;
+            text-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
+        }
+        .data-format { color: rgba(255, 255, 255, 0.7); }
+
+        /* Waveform Styles */
+        .waveform-container { margin: 1.5rem 0; }
+        .waveform-pair {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+        .waveform-pair > div {
+            background: rgba(30, 30, 50, 0.8);
+            border: 1px solid rgba(240, 147, 251, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s;
+        }
+        .waveform-pair > div:hover {
+            border-color: #f093fb;
+            box-shadow: 0 0 20px rgba(240, 147, 251, 0.2);
+        }
+        .waveform-pair h4 {
+            margin: 0 0 1rem 0;
+            font-size: 0.95rem;
+            color: #ffffff;
+            font-weight: 600;
+            text-align: center;
+            text-shadow: 0 0 10px rgba(240, 147, 251, 0.3);
+        }
+        .waveform-pair canvas {
+            width: 100%;
+            height: auto;
+            background: rgba(10, 10, 30, 0.8);
+            border-radius: 8px;
+            border: 1px solid rgba(240, 147, 251, 0.2);
+        }
+
+        /* Data Inspector Styles */
+        .inspector-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+        .inspector-section {
+            background: rgba(30, 30, 50, 0.8);
+            border: 1px solid rgba(240, 147, 251, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s;
+        }
+        .inspector-section:hover {
+            border-color: #f093fb;
+            box-shadow: 0 0 20px rgba(240, 147, 251, 0.2);
+        }
+        .inspector-section h4 {
+            margin: 0 0 1rem 0;
+            font-size: 0.95rem;
+            color: #ffffff;
+            font-weight: 600;
+            text-shadow: 0 0 10px rgba(240, 147, 251, 0.3);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+        }
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.875rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid rgba(240, 147, 251, 0.1);
+        }
+        .stat-item:last-child { border-bottom: none; }
+        .stat-item label {
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        .channel-histogram {
+            width: 100%;
+            height: auto;
+            background: rgba(10, 10, 30, 0.8);
+            border-radius: 8px;
+            border: 1px solid rgba(240, 147, 251, 0.2);
+        }
+        .hex-viewer {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+            font-size: 0.8rem;
+            background: rgba(10, 10, 30, 0.8);
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid rgba(240, 147, 251, 0.2);
+            word-break: break-all;
+            max-height: 120px;
+            overflow-y: auto;
+            color: #00f2fe;
+        }
+
+        /* Performance Styles */
+        .performance-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+        .perf-section {
+            background: rgba(30, 30, 50, 0.8);
+            border: 1px solid rgba(240, 147, 251, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s;
+        }
+        .perf-section:hover {
+            border-color: #f093fb;
+            box-shadow: 0 0 20px rgba(240, 147, 251, 0.2);
+        }
+        .perf-section h4 {
+            margin: 0 0 1rem 0;
+            font-size: 0.95rem;
+            color: #ffffff;
+            font-weight: 600;
+            text-shadow: 0 0 10px rgba(240, 147, 251, 0.3);
+        }
+        .timing-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .timing-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.875rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid rgba(240, 147, 251, 0.1);
+        }
+        .timing-item:last-child { border-bottom: none; }
+        .timing-item.total {
+            font-weight: 600;
+            border-top: 1px solid rgba(240, 147, 251, 0.3);
+            padding-top: 1rem;
+            margin-top: 1rem;
+            color: #f093fb;
+            text-shadow: 0 0 15px rgba(240, 147, 251, 0.5);
+        }
+        .memory-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .memory-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.875rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid rgba(240, 147, 251, 0.1);
+        }
+        .memory-item:last-child { border-bottom: none; }
+
+        /* Filter Chain Styles */
+        #filter-chain {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-top: 0.5rem;
+            max-height: 300px;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+        .filter-chain-item {
+            background: rgba(20, 20, 40, 0.8);
+            border: 1px solid rgba(240, 147, 251, 0.3);
+            border-radius: 8px;
+            padding: 1rem;
+            position: relative;
+            transition: all 0.3s;
+        }
+        .filter-chain-item:hover {
+            border-color: #f093fb;
+            box-shadow: 0 0 15px rgba(240, 147, 251, 0.2);
+        }
+        .filter-chain-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+        .filter-name {
+            font-weight: 600;
+            color: #ffffff;
+            font-size: 0.9rem;
+            text-shadow: 0 0 10px rgba(240, 147, 251, 0.3);
+        }
+        .remove-filter-btn {
+            background: linear-gradient(135deg, #ff6b6b, #ff4444);
+            border: none;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            transition: all 0.3s;
+        }
+        .remove-filter-btn:hover {
+            background: linear-gradient(135deg, #ff8888, #ff6666);
+            box-shadow: 0 0 10px rgba(255, 68, 68, 0.3);
+        }
+        .filter-params {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .chain-summary {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            background: rgba(10, 10, 30, 0.8);
+            border: 1px solid rgba(240, 147, 251, 0.2);
+            border-radius: 6px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+            font-size: 0.8rem;
+            color: #00f2fe;
+            text-align: center;
+            min-height: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .chain-empty {
+            color: rgba(255, 255, 255, 0.5);
+            font-style: italic;
+        }
+        .add-filter-btn {
+            background: linear-gradient(135deg, #4facfe, #00f2fe);
+            margin-top: 0.5rem;
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+        }
+        .add-filter-btn:hover {
+            box-shadow: 0 8px 30px rgba(79, 172, 254, 0.4), 0 0 50px rgba(0, 242, 254, 0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Image Sonification</h1>
+
+        <div class="main-grid">
+            <div class="controls">
+                <div class="control-group">
+                    <label for="image-upload">Upload Image</label>
+                    <input type="file" id="image-upload" accept="image/jpeg, image/png">
+                </div>
+
+                <div class="control-group">
+                    <label>Add Filter</label>
+                    <select id="filter-select">
+                        <optgroup label="Audio Filters">
+                            <option value="aecho">Echo</option>
+                            <option value="bass">Bass Boost</option>
+                            <option value="treble">Treble Boost</option>
+                            <option value="phaser">Phaser</option>
+                            <option value="flanger">Flanger</option>
+                            <option value="vibrato">Vibrato</option>
+                            <option value="distortion">Distortion</option>
+                            <option value="pitch_shift">Pitch Shift</option>
+                            <option value="stretch">Time Stretch</option>
+                            <option value="compand">Compressor</option>
+                            <option value="highpass">High Pass</option>
+                            <option value="lowpass">Low Pass</option>
+                        </optgroup>
+                        <optgroup label="Glitch Effects">
+                            <option value="bit_crush">Bit Crush</option>
+                            <option value="data_mosh">Data Mosh</option>
+                            <option value="glitch_blocks">Glitch Blocks</option>
+                            <option value="channel_swap">Channel Swap</option>
+                        </optgroup>
+                    </select>
+                    <button id="add-filter-btn" class="add-filter-btn">+ Add Filter</button>
+                </div>
+
+                <div class="control-group">
+                    <label>Filter Chain</label>
+                    <div id="filter-chain">
+                        <!-- Filter chain items will be dynamically inserted here -->
+                    </div>
+                    <div id="chain-summary" class="chain-summary"></div>
+                </div>
+
+                <div class="control-group">
+                    <button id="process-btn" disabled>Process Chain</button>
+                    <button id="download-btn" style="display:none;">Download Result</button>
+                </div>
+            </div>
+
+            <div>
+                 <div class="image-grid">
+                    <div class="box">
+                        <h2>Original</h2>
+                        <canvas id="original-canvas"></canvas>
+                    </div>
+                    <div class="box">
+                        <h2>Filtered</h2>
+                        <canvas id="filtered-canvas"></canvas>
+                    </div>
+                </div>
+                <div class="status" id="status-log"><strong>Status:</strong> Awaiting image...</div>
+
+                <!-- Debug Visualizer Panel -->
+                <div class="debug-panel">
+                    <div class="debug-header">
+                        <div class="debug-tabs">
+                            <button class="debug-tab active" data-tab="data-flow">Data Flow</button>
+                            <button class="debug-tab" data-tab="waveform">Waveform</button>
+                            <button class="debug-tab" data-tab="data-inspector">Data Inspector</button>
+                            <button class="debug-tab" data-tab="performance">Performance</button>
+                        </div>
+                        <div class="debug-controls">
+                            <button id="debug-toggle" class="debug-toggle-btn">🔧 Debug: ON</button>
+                        </div>
+                    </div>
+
+                    <div class="debug-content">
+                        <!-- Data Flow Tab -->
+                        <div class="debug-tab-content active" id="data-flow">
+                            <h3>Data Pipeline Visualization</h3>
+                            <div class="pipeline-container">
+                                <canvas id="pipeline-canvas" width="800" height="200"></canvas>
+                            </div>
+                            <div class="data-stages">
+                                <div class="stage-card" id="stage-original">
+                                    <h4>Original Image</h4>
+                                    <div class="stage-info">
+                                        <div class="data-size">-</div>
+                                        <div class="data-format">RGBA</div>
+                                    </div>
+                                </div>
+                                <div class="stage-card" id="stage-rgb">
+                                    <h4>RGB Data</h4>
+                                    <div class="stage-info">
+                                        <div class="data-size">-</div>
+                                        <div class="data-format">RGB</div>
+                                    </div>
+                                </div>
+                                <div class="stage-card" id="stage-processed">
+                                    <h4>Processed Data</h4>
+                                    <div class="stage-info">
+                                        <div class="data-size">-</div>
+                                        <div class="data-format">Processed</div>
+                                    </div>
+                                </div>
+                                <div class="stage-card" id="stage-reconstructed">
+                                    <h4>Reconstructed</h4>
+                                    <div class="stage-info">
+                                        <div class="data-size">-</div>
+                                        <div class="data-format">RGBA</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Waveform Tab -->
+                        <div class="debug-tab-content" id="waveform">
+                            <h3>Audio Waveform Visualization</h3>
+                            <div class="waveform-container">
+                                <div class="waveform-pair">
+                                    <div>
+                                        <h4>Original Waveform</h4>
+                                        <canvas id="waveform-original" width="400" height="150"></canvas>
+                                    </div>
+                                    <div>
+                                        <h4>Processed Waveform</h4>
+                                        <canvas id="waveform-processed" width="400" height="150"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Data Inspector Tab -->
+                        <div class="debug-tab-content" id="data-inspector">
+                            <h3>Data Inspector</h3>
+                            <div class="inspector-grid">
+                                <div class="inspector-section">
+                                    <h4>RGB Statistics</h4>
+                                    <div class="stats-grid">
+                                        <div class="stat-item">
+                                            <label>Min Value:</label>
+                                            <span id="stat-min">-</span>
+                                        </div>
+                                        <div class="stat-item">
+                                            <label>Max Value:</label>
+                                            <span id="stat-max">-</span>
+                                        </div>
+                                        <div class="stat-item">
+                                            <label>Mean:</label>
+                                            <span id="stat-mean">-</span>
+                                        </div>
+                                        <div class="stat-item">
+                                            <label>Std Dev:</label>
+                                            <span id="stat-std">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="inspector-section">
+                                    <h4>Channel Distribution</h4>
+                                    <canvas id="channel-histogram" width="300" height="150"></canvas>
+                                </div>
+                                <div class="inspector-section">
+                                    <h4>Raw Data (First 64 bytes)</h4>
+                                    <div class="hex-viewer" id="hex-viewer">-</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Performance Tab -->
+                        <div class="debug-tab-content" id="performance">
+                            <h3>Performance Analysis</h3>
+                            <div class="performance-grid">
+                                <div class="perf-section">
+                                    <h4>Timing Breakdown</h4>
+                                    <div class="timing-list" id="timing-list">
+                                        <div class="timing-item">
+                                            <span>RGB Extraction:</span>
+                                            <span id="time-extraction">-</span>
+                                        </div>
+                                        <div class="timing-item">
+                                            <span>Compression:</span>
+                                            <span id="time-compression">-</span>
+                                        </div>
+                                        <div class="timing-item">
+                                            <span>Network:</span>
+                                            <span id="time-network">-</span>
+                                        </div>
+                                        <div class="timing-item">
+                                            <span>Server Processing:</span>
+                                            <span id="time-server">-</span>
+                                        </div>
+                                        <div class="timing-item">
+                                            <span>Reconstruction:</span>
+                                            <span id="time-reconstruction">-</span>
+                                        </div>
+                                        <div class="timing-item total">
+                                            <span>Total Time:</span>
+                                            <span id="time-total">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="perf-section">
+                                    <h4>Memory Usage</h4>
+                                    <div class="memory-info">
+                                        <div class="memory-item">
+                                            <span>Original Data:</span>
+                                            <span id="memory-original">-</span>
+                                        </div>
+                                        <div class="memory-item">
+                                            <span>RGB Data:</span>
+                                            <span id="memory-rgb">-</span>
+                                        </div>
+                                        <div class="memory-item">
+                                            <span>Processed Data:</span>
+                                            <span id="memory-processed">-</span>
+                                        </div>
+                                        <div class="memory-item">
+                                            <span>Cache Status:</span>
+                                            <span id="cache-status">Empty</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const uploadInput = document.getElementById('image-upload');
+        const processBtn = document.getElementById('process-btn');
+        const downloadBtn = document.getElementById('download-btn');
+        const filterSelect = document.getElementById('filter-select');
+        const addFilterBtn = document.getElementById('add-filter-btn');
+        const filterChain = document.getElementById('filter-chain');
+        const chainSummary = document.getElementById('chain-summary');
+        const originalCanvas = document.getElementById('original-canvas');
+        const filteredCanvas = document.getElementById('filtered-canvas');
+        const statusLog = document.getElementById('status-log');
+
+        // Filter chain management
+        let filterChainData = [];
+        let filterIdCounter = 0;
+
+        let originalImageData = null;
+        let originalWidth = 0;
+        let originalHeight = 0;
+
+        // Client-side caching for RGB data
+        let cachedRgbData = null;
+        let cachedImageHash = null;
+
+        // --- Filter Chain Management Functions ---
+
+        function addFilterToChain() {
+            const filterType = filterSelect.value;
+            const filterName = filterSelect.options[filterSelect.selectedIndex].text;
+
+            const filterItem = {
+                id: filterIdCounter++,
+                type: filterType,
+                name: filterName,
+                params: getDefaultParams(filterType)
+            };
+
+            filterChainData.push(filterItem);
+            renderFilterChain();
+            updateChainSummary();
+        }
+
+        function removeFilterFromChain(filterId) {
+            filterChainData = filterChainData.filter(f => f.id !== filterId);
+            renderFilterChain();
+            updateChainSummary();
+        }
+
+        function updateFilterParam(filterId, paramName, value) {
+            const filter = filterChainData.find(f => f.id === filterId);
+            if (filter) {
+                filter.params[paramName] = value;
+                updateChainSummary();
+            }
+        }
+
+        function getDefaultParams(filterType) {
+            const defaults = {
+                'aecho': { in_gain: 0.8, out_gain: 0.9, delay: 1000, decay: 0.3 },
+                'bass': { gain: 5 },
+                'treble': { gain: 5 },
+                'phaser': { in_gain: 0.8, out_gain: 0.7, delay: 3.0, decay: 0.4 },
+                'flanger': { delay: 2.0, depth: 10.0, regen: 0.5, width: 70.0, speed: 0.5 },
+                'vibrato': { freq: 5.0, depth: 0.5 },
+                'distortion': { level_in: 1.0, level_out: 1.0, amount: 0.5 },
+                'pitch_shift': { shift: 0 },
+                'stretch': { tempo: 1.0 },
+                'compand': { attack: 0.2, decay: 0.8, soft_knee: 0.01, threshold: -20, ratio: 20, makeup: 8 },
+                'highpass': { frequency: 500 },
+                'lowpass': { frequency: 5000 },
+                'bit_crush': { bits: 4 },
+                'data_mosh': { intensity: 0.1 },
+                'glitch_blocks': { block_size: 64, intensity: 0.05 },
+                'channel_swap': { intensity: 0.3 }
+            };
+            return defaults[filterType] || {};
+        }
+
+        function renderFilterChain() {
+            filterChain.innerHTML = '';
+
+            filterChainData.forEach(filter => {
+                const filterDiv = document.createElement('div');
+                filterDiv.className = 'filter-chain-item';
+                filterDiv.innerHTML = `
+                    <div class="filter-chain-header">
+                        <span class="filter-name">${filter.name}</span>
+                        <button class="remove-filter-btn" onclick="removeFilterFromChain(${filter.id})">×</button>
+                    </div>
+                    <div class="filter-params">
+                        ${generateFilterParams(filter)}
+                    </div>
+                `;
+                filterChain.appendChild(filterDiv);
+            });
+
+            // Enable/disable process button
+            processBtn.disabled = filterChainData.length === 0 || !originalImageData;
+        }
+
+        function generateFilterParams(filter) {
+            let html = '';
+
+            switch (filter.type) {
+                case 'aecho':
+                    html = `
+                        <div class="param-group">
+                            <label for="param-${filter.id}-in_gain">Input Gain: <span>${filter.params.in_gain}</span></label>
+                            <input type="range" id="param-${filter.id}-in_gain" min="0.1" max="1.0" step="0.05" value="${filter.params.in_gain}" onchange="updateFilterParam(${filter.id}, 'in_gain', this.value); this.previousElementSibling.querySelector('span').textContent = this.value;">
+                        </div>
+                        <div class="param-group">
+                            <label for="param-${filter.id}-out_gain">Output Gain: <span>${filter.params.out_gain}</span></label>
+                            <input type="range" id="param-${filter.id}-out_gain" min="0.1" max="1.0" step="0.05" value="${filter.params.out_gain}" onchange="updateFilterParam(${filter.id}, 'out_gain', this.value); this.previousElementSibling.querySelector('span').textContent = this.value;">
+                        </div>
+                        <div class="param-group">
+                            <label for="param-${filter.id}-delay">Delay (ms): <span>${filter.params.delay}</span></label>
+                            <input type="range" id="param-${filter.id}-delay" min="1" max="2000" step="1" value="${filter.params.delay}" onchange="updateFilterParam(${filter.id}, 'delay', this.value); this.previousElementSibling.querySelector('span').textContent = this.value;">
+                        </div>
+                        <div class="param-group">
+                            <label for="param-${filter.id}-decay">Decay: <span>${filter.params.decay}</span></label>
+                            <input type="range" id="param-${filter.id}-decay" min="0.1" max="1.0" step="0.05" value="${filter.params.decay}" onchange="updateFilterParam(${filter.id}, 'decay', this.value); this.previousElementSibling.querySelector('span').textContent = this.value;">
+                        </div>
+                    `;
+                    break;
+                case 'bass':
+                case 'treble':
+                    html = `
+                        <div class="param-group">
+                            <label for="param-${filter.id}-gain">Gain (dB): <span>${filter.params.gain}</span></label>
+                            <input type="range" id="param-${filter.id}-gain" min="-20" max="20" step="1" value="${filter.params.gain}" onchange="updateFilterParam(${filter.id}, 'gain', this.value); this.previousElementSibling.querySelector('span').textContent = this.value;">
+                        </div>
+                    `;
+                    break;
+                case 'phaser':
+                    html = `
+                        <div class="param-group">
+                            <label for="param-${filter.id}-in_gain">Input Gain: <span>${filter.params.in_gain}</span></label>
+                            <input type="range" id="param-${filter.id}-in_gain" min="0" max="1" step="0.05" value="${filter.params.in_gain}" onchange="updateFilterParam(${filter.id}, 'in_gain', this.value); this.previousElementSibling.querySelector('span').textContent = this.value;">
+                        </div>
+                        <div class="param-group">
+                            <label for="param-${filter.id}-out_gain">Output Gain: <span>${filter.params.out_gain}</span></label>
+                            <input type="range" id="param-${filter.id}-out_gain" min="0" max="1" step="0.05" value="${filter.params.out_gain}" onchange="updateFilterParam(${filter.id}, 'out_gain', this.value); this.previousElementSibling.querySelector('span').textContent = this.value;">
+                        </div>
+                        <div class="param-group">
+                            <label for="param-${filter.id}-delay">Delay (ms): <span>${filter.params.delay}</span></label>
+                            <input type="range" id="param-${filter.id}-delay" min="0" max="5" step="0.1" value="${filter.params.delay}" onchange="updateFilterParam(${filter.id}, 'delay', this.value); this.previousElementSibling.querySelector('span').textContent = this.value;">
+                        </div>
+                        <div class="param-group">
+                            <label for="param-${filter.id}-decay">Decay: <span>${filter.params.decay}</span></label>
+                            <input type="range" id="param-${filter.id}-decay" min="0.1" max="0.99" step="0.05" value="${filter.params.decay}" onchange="updateFilterParam(${filter.id}, 'decay', this.value); this.previousElementSibling.querySelector('span').textContent = this.value;">
+                        </div>
+                    `;
+                    break;
+                // Add more filter parameter generators as needed...
+                default:
+                    // For filters with simple parameters, generate basic controls
+                    Object.entries(filter.params).forEach(([param, value]) => {
+                        html += `
+                            <div class="param-group">
+                                <label for="param-${filter.id}-${param}">${param}: <span>${value}</span></label>
+                                <input type="range" id="param-${filter.id}-${param}" min="0" max="100" step="1" value="${value}" onchange="updateFilterParam(${filter.id}, '${param}', this.value); this.previousElementSibling.querySelector('span').textContent = this.value;">
+                            </div>
+                        `;
+                    });
+            }
+
+            return html;
+        }
+
+        function updateChainSummary() {
+            if (filterChainData.length === 0) {
+                chainSummary.innerHTML = '<span class="chain-empty">No filters added</span>';
+            } else {
+                const chainText = filterChainData.map(f => f.name).join(' → ');
+                chainSummary.innerHTML = `<span>${chainText}</span>`;
+            }
+        }
+
+        function log(message) {
+            console.log(message);
+            statusLog.innerHTML = `<strong>Status:</strong> ${message}`;
+        }
+
+        // Generate a proper hash for the current image to validate cache
+        function generateImageHash() {
+            if (!originalImageData) return null;
+
+            // Create a simple hash based on image dimensions and pixel data sample
+            const sampleSize = Math.min(1000, originalImageData.data.length / 4); // Sample first 1000 pixels
+            let hash = `${originalWidth}x${originalHeight}_`;
+
+            // Sample pixels at regular intervals for hash
+            const step = Math.max(1, Math.floor((originalImageData.data.length / 4) / sampleSize));
+            for (let i = 0; i < sampleSize * 4; i += step * 4) {
+                hash += `${originalImageData.data[i]}${originalImageData.data[i+1]}${originalImageData.data[i+2]}_`;
+            }
+
+            // Simple string hash function
+            let hashNum = 0;
+            for (let i = 0; i < hash.length; i++) {
+                const char = hash.charCodeAt(i);
+                hashNum = ((hashNum << 5) - hashNum) + char;
+                hashNum = hashNum & hashNum; // Convert to 32-bit integer
+            }
+
+            return Math.abs(hashNum).toString(36);
+        }
+
+        // Clear RGB data cache
+        function clearRgbCache() {
+            cachedRgbData = null;
+            cachedImageHash = null;
+        }
+
+        // Compression helper function
+        async function compressData(data) {
+            const compressionStream = new CompressionStream('gzip');
+            const writer = compressionStream.writable.getWriter();
+            const reader = compressionStream.readable.getReader();
+
+            // Write data and close the stream
+            writer.write(data);
+            writer.close();
+
+            // Collect compressed chunks
+            const chunks = [];
+            let done = false;
+            while (!done) {
+                const { value, done: readerDone } = await reader.read();
+                done = readerDone;
+                if (value) chunks.push(value);
+            }
+
+            // Combine chunks into single array
+            const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+            const result = new Uint8Array(totalLength);
+            let offset = 0;
+            for (const chunk of chunks) {
+                result.set(chunk, offset);
+                offset += chunk.length;
+            }
+
+            return result;
+        }
+        
+        // --- UI Generation for Filter Parameters ---
+        function updateFilterUI() {
+            const filter = filterSelect.value;
+            paramsContainer.innerHTML = ''; // Clear old params
+
+            let html = '<h3>Filter Parameters</h3>';
+
+            switch (filter) {
+                case 'aecho':
+                    html += `
+                        <div class="param-group">
+                            <label for="aecho-in_gain">Input Gain: <span>0.8</span></label>
+                            <input type="range" id="aecho-in_gain" min="0.1" max="1.0" step="0.05" value="0.8">
+                        </div>
+                        <div class="param-group">
+                            <label for="aecho-out_gain">Output Gain: <span>0.9</span></label>
+                            <input type="range" id="aecho-out_gain" min="0.1" max="1.0" step="0.05" value="0.9">
+                        </div>
+                        <div class="param-group">
+                            <label for="aecho-delay">Delay (ms): <span>1000</span></label>
+                            <input type="range" id="aecho-delay" min="1" max="2000" step="1" value="1000">
+                        </div>
+                        <div class="param-group">
+                            <label for="aecho-decay">Decay: <span>0.3</span></label>
+                            <input type="range" id="aecho-decay" min="0.1" max="1.0" step="0.05" value="0.3">
+                        </div>
+                    `;
+                    break;
+                  case 'bass':
+                case 'treble':
+                    const type = filter.charAt(0).toUpperCase() + filter.slice(1);
+                     html += `
+                        <div class="param-group">
+                            <label for="${filter}-gain">Gain (dB): <span>5</span></label>
+                            <input type="range" id="${filter}-gain" min="-20" max="20" step="1" value="5">
+                        </div>
+                    `;
+                    break;
+                case 'phaser':
+                     html += `
+                        <div class="param-group">
+                            <label for="phaser-in_gain">Input Gain: <span>0.8</span></label>
+                            <input type="range" id="phaser-in_gain" min="0" max="1" step="0.05" value="0.8">
+                        </div>
+                        <div class="param-group">
+                            <label for="phaser-out_gain">Output Gain: <span>0.7</span></label>
+                            <input type="range" id="phaser-out_gain" min="0" max="1" step="0.05" value="0.7">
+                        </div>
+                        <div class="param-group">
+                            <label for="phaser-delay">Delay (ms): <span>3.0</span></label>
+                            <input type="range" id="phaser-delay" min="0" max="5" step="0.1" value="3.0">
+                        </div>
+                        <div class="param-group">
+                            <label for="phaser-decay">Decay: <span>0.4</span></label>
+                            <input type="range" id="phaser-decay" min="0.1" max="0.99" step="0.05" value="0.4">
+                        </div>
+                    `;
+                    break;
+                case 'flanger':
+                    html += `
+                        <div class="param-group">
+                            <label for="flanger-delay">Delay: <span>2.0</span></label>
+                            <input type="range" id="flanger-delay" min="0" max="30" step="0.1" value="2.0">
+                        </div>
+                        <div class="param-group">
+                            <label for="flanger-depth">Depth: <span>10.0</span></label>
+                            <input type="range" id="flanger-depth" min="0" max="100" step="1" value="10.0">
+                        </div>
+                        <div class="param-group">
+                            <label for="flanger-regen">Regeneration: <span>0.5</span></label>
+                            <input type="range" id="flanger-regen" min="-1" max="1" step="0.1" value="0.5">
+                        </div>
+                        <div class="param-group">
+                            <label for="flanger-width">Width: <span>70.0</span></label>
+                            <input type="range" id="flanger-width" min="0" max="100" step="1" value="70.0">
+                        </div>
+                        <div class="param-group">
+                            <label for="flanger-speed">Speed: <span>0.5</span></label>
+                            <input type="range" id="flanger-speed" min="0.1" max="10" step="0.1" value="0.5">
+                        </div>
+                    `;
+                    break;
+                case 'vibrato':
+                    html += `
+                        <div class="param-group">
+                            <label for="vibrato-freq">Frequency (Hz): <span>5.0</span></label>
+                            <input type="range" id="vibrato-freq" min="0.1" max="20" step="0.5" value="5.0">
+                        </div>
+                        <div class="param-group">
+                            <label for="vibrato-depth">Depth: <span>0.5</span></label>
+                            <input type="range" id="vibrato-depth" min="0" max="1" step="0.05" value="0.5">
+                        </div>
+                    `;
+                    break;
+                case 'distortion':
+                    html += `
+                        <div class="param-group">
+                            <label for="distortion-level_in">Input Level: <span>1.0</span></label>
+                            <input type="range" id="distortion-level_in" min="0.1" max="10" step="0.1" value="1.0">
+                        </div>
+                        <div class="param-group">
+                            <label for="distortion-level_out">Output Level: <span>1.0</span></label>
+                            <input type="range" id="distortion-level_out" min="0.1" max="10" step="0.1" value="1.0">
+                        </div>
+                        <div class="param-group">
+                            <label for="distortion-amount">Amount: <span>0.5</span></label>
+                            <input type="range" id="distortion-amount" min="0" max="1" step="0.05" value="0.5">
+                        </div>
+                    `;
+                    break;
+                case 'pitch_shift':
+                    html += `
+                        <div class="param-group">
+                            <label for="pitch_shift-shift">Pitch Shift (semitones): <span>0</span></label>
+                            <input type="range" id="pitch_shift-shift" min="-12" max="12" step="1" value="0">
+                        </div>
+                    `;
+                    break;
+                case 'stretch':
+                    html += `
+                        <div class="param-group">
+                            <label for="stretch-tempo">Tempo: <span>1.0</span></label>
+                            <input type="range" id="stretch-tempo" min="0.5" max="100.0" step="0.5" value="1.0">
+                        </div>
+                    `;
+                    break;
+                case 'compand':
+                    html += `
+                        <div class="param-group">
+                            <label for="compand-attack">Attack: <span>0.2</span></label>
+                            <input type="range" id="compand-attack" min="0.01" max="1" step="0.01" value="0.2">
+                        </div>
+                        <div class="param-group">
+                            <label for="compand-decay">Decay: <span>0.8</span></label>
+                            <input type="range" id="compand-decay" min="0.01" max="2" step="0.01" value="0.8">
+                        </div>
+                        <div class="param-group">
+                            <label for="compand-soft_knee">Soft Knee: <span>0.01</span></label>
+                            <input type="range" id="compand-soft_knee" min="0.01" max="1" step="0.01" value="0.01">
+                        </div>
+                        <div class="param-group">
+                            <label for="compand-threshold">Threshold (dB): <span>-20</span></label>
+                            <input type="range" id="compand-threshold" min="-60" max="0" step="1" value="-20">
+                        </div>
+                        <div class="param-group">
+                            <label for="compand-ratio">Ratio: <span>20</span></label>
+                            <input type="range" id="compand-ratio" min="1" max="50" step="1" value="20">
+                        </div>
+                        <div class="param-group">
+                            <label for="compand-makeup">Makeup Gain (dB): <span>8</span></label>
+                            <input type="range" id="compand-makeup" min="1" max="20" step="0.5" value="8">
+                        </div>
+                    `;
+                    break;
+                case 'highpass':
+                case 'lowpass':
+                    const filterType = filter === 'highpass' ? 'High Pass' : 'Low Pass';
+                    html += `
+                        <div class="param-group">
+                            <label for="${filter}-frequency">Frequency (Hz): <span>${filter === 'highpass' ? 500 : 5000}</span></label>
+                            <input type="range" id="${filter}-frequency" min="20" max="20000" step="10" value="${filter === 'highpass' ? 500 : 5000}">
+                        </div>
+                    `;
+                    break;
+                case 'bit_crush':
+                    html += `
+                        <div class="param-group">
+                            <label for="bit_crush-bits">Bit Depth: <span>4</span></label>
+                            <input type="range" id="bit_crush-bits" min="1" max="8" step="1" value="4">
+                        </div>
+                    `;
+                    break;
+                case 'data_mosh':
+                    html += `
+                        <div class="param-group">
+                            <label for="data_mosh-intensity">Intensity: <span>0.1</span></label>
+                            <input type="range" id="data_mosh-intensity" min="0.01" max="0.5" step="0.01" value="0.1">
+                        </div>
+                    `;
+                    break;
+                case 'glitch_blocks':
+                    html += `
+                        <div class="param-group">
+                            <label for="glitch_blocks-block_size">Block Size: <span>64</span></label>
+                            <input type="range" id="glitch_blocks-block_size" min="8" max="256" step="8" value="64">
+                        </div>
+                        <div class="param-group">
+                            <label for="glitch_blocks-intensity">Intensity: <span>0.05</span></label>
+                            <input type="range" id="glitch_blocks-intensity" min="0.01" max="0.3" step="0.01" value="0.05">
+                        </div>
+                    `;
+                    break;
+                case 'channel_swap':
+                    html += `
+                        <div class="param-group">
+                            <label for="channel_swap-intensity">Intensity: <span>0.3</span></label>
+                            <input type="range" id="channel_swap-intensity" min="0.01" max="1.0" step="0.01" value="0.3">
+                        </div>
+                    `;
+                    break;
+            }
+            paramsContainer.innerHTML = html;
+
+            // Update slider value displays for newly created elements
+            const sliders = paramsContainer.querySelectorAll('input[type="range"]');
+            sliders.forEach(slider => {
+                const labelSpan = slider.previousElementSibling?.querySelector('span');
+                if (labelSpan) {
+                    labelSpan.textContent = slider.value;
+                }
+            });
+        }
+
+        // Update slider value display on input (using event delegation)
+        paramsContainer.addEventListener('input', (e) => {
+            if (e.target.type === 'range') {
+                const labelSpan = e.target.previousElementSibling?.querySelector('span');
+                if (labelSpan) {
+                    labelSpan.textContent = e.target.value;
+                }
+            }
+        });
+
+        // --- Core Application Logic ---
+        uploadInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) { log("File selection cancelled."); return; }
+            log(`File selected: ${file.name}`);
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    originalWidth = img.width;
+                    originalHeight = img.height;
+                    originalCanvas.width = originalWidth;
+                    originalCanvas.height = originalHeight;
+                    const ctx = originalCanvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    originalImageData = ctx.getImageData(0, 0, originalWidth, originalHeight);
+
+                    // Clear RGB cache when new image is uploaded
+                    clearRgbCache();
+
+                    // Store debug data
+                    debugData.originalImageData = originalImageData;
+                    debugData.rgbData = null;
+                    debugData.processedData = null;
+                    debugData.reconstructedImageData = null;
+                    debugData.timingData = {};
+                    debugData.cacheHit = false;
+
+                    // Update debug visualizations
+                    updateDebugVisualizations();
+
+                    log(`Image loaded (${originalWidth}x${originalHeight}). Ready to process.`);
+                    filteredCanvas.width = originalWidth;
+                    filteredCanvas.height = originalHeight;
+                    filteredCanvas.getContext('2d').clearRect(0, 0, originalWidth, originalHeight);
+                    downloadBtn.style.display = 'none';
+                    processBtn.disabled = filterChainData.length === 0;
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        processBtn.addEventListener('click', async () => {
+            if (!originalImageData) { alert("Please upload an image first."); return; }
+            if (filterChainData.length === 0) { alert("Please add at least one filter to the chain."); return; }
+
+            processBtn.disabled = true;
+            processBtn.textContent = "Processing Chain...";
+            log(`Processing filter chain with ${filterChainData.length} filters...`);
+
+            try {
+                log("Starting optimized chain processing...");
+                const startTime = performance.now();
+
+                // Clear previous debug data
+                debugData.timingData = {};
+                debugData.cacheHit = false;
+
+                // Initialize Web Worker for processing
+                const worker = new Worker('/worker.js');
+
+                // Step 1: Check cache and extract RGB data if needed
+                let rgbData;
+                const currentImageHash = generateImageHash();
+
+                if (cachedRgbData && cachedImageHash === currentImageHash) {
+                    // Use cached RGB data
+                    rgbData = cachedRgbData;
+                    debugData.cacheHit = true;
+                    debugData.rgbData = rgbData;
+                    log("Using cached RGB data (instant access)");
+                } else {
+                    // Extract RGB data using Web Worker
+                    log("Extracting RGB data (Web Worker)...");
+                    const extractionStartTime = performance.now();
+
+                    rgbData = await new Promise((resolve, reject) => {
+                        worker.onmessage = (e) => {
+                            if (e.data.success && e.data.operation === 'extractRgb') {
+                                resolve(new Uint8ClampedArray(e.data.rgbData));
+                            } else {
+                                reject(new Error(e.data.error || 'Worker extraction failed'));
+                            }
+                        };
+
+                        worker.postMessage({
+                            imageData: originalImageData,
+                            originalWidth,
+                            originalHeight,
+                            operation: 'extractRgb'
+                        });
+                    });
+
+                    const extractionTime = performance.now() - extractionStartTime;
+                    debugData.timingData.extraction = extractionTime;
+                    log(`RGB extraction completed in ${extractionTime.toFixed(1)}ms`);
+
+                    // Store debug data and cache
+                    debugData.rgbData = rgbData;
+                    cachedRgbData = rgbData;
+                    cachedImageHash = currentImageHash;
+                }
+
+                // Step 2: Process filter chain
+                log("Processing filter chain...");
+                const chainStartTime = performance.now();
+                let processedRgbData = rgbData;
+
+                // Separate custom filters from FFmpeg filters for batch processing
+                const customFilters = filterChainData.filter(f =>
+                    ['bit_crush', 'data_mosh', 'glitch_blocks', 'channel_swap'].includes(f.type)
+                );
+                const ffmpegFilters = filterChainData.filter(f =>
+                    !['bit_crush', 'data_mosh', 'glitch_blocks', 'channel_swap'].includes(f.type)
+                );
+
+                // Apply custom filters first (they work on raw pixel data)
+                for (const filter of customFilters) {
+                    log(`Applying custom filter: ${filter.name}`);
+                    const filterStartTime = performance.now();
+
+                    // Apply custom filter directly in browser (faster than server round-trip)
+                    processedRgbData = await applyCustomFilterInBrowser(processedRgbData, filter);
+
+                    const filterTime = performance.now() - filterStartTime;
+                    log(`Custom filter ${filter.name} completed in ${filterTime.toFixed(1)}ms`);
+                }
+
+                // Batch process FFmpeg filters if any exist
+                if (ffmpegFilters.length > 0) {
+                    log(`Batch processing ${ffmpegFilters.length} FFmpeg filters...`);
+                    const ffmpegStartTime = performance.now();
+
+                    processedRgbData = await processFFmpegFilterChain(processedRgbData, ffmpegFilters);
+
+                    const ffmpegTime = performance.now() - ffmpegStartTime;
+                    debugData.timingData.ffmpeg = ffmpegTime;
+                    log(`FFmpeg batch processing completed in ${ffmpegTime.toFixed(1)}ms`);
+                }
+
+                const chainTime = performance.now() - chainStartTime;
+                debugData.timingData.chain = chainTime;
+
+                // Step 3: Compress final data for transmission
+                log("Compressing final data for transmission...");
+                const compressionStartTime = performance.now();
+
+                let compressedData = processedRgbData;
+                if ('CompressionStream' in window) {
+                    try {
+                        compressedData = await compressData(processedRgbData);
+                        const compressionTime = performance.now() - compressionStartTime;
+                        debugData.timingData.compression = compressionTime;
+                        debugData.compressionData = {
+                            original: processedRgbData.length,
+                            compressed: compressedData.length,
+                            reduction: Math.round((1 - compressedData.length / processedRgbData.length) * 100)
+                        };
+                        log(`Compressed ${processedRgbData.length} bytes to ${compressedData.length} bytes (${debugData.compressionData.reduction}% reduction, ${compressionTime.toFixed(1)}ms)`);
+                    } catch (error) {
+                        log("Compression failed, sending uncompressed data");
+                    }
+                }
+
+                // Step 4: Reconstruct image in worker
+                log("Reconstructing final image (Web Worker)...");
+                const reconstructionStartTime = performance.now();
+
+                const newImageData = await new Promise((resolve, reject) => {
+                    worker.onmessage = (e) => {
+                        if (e.data.success && e.data.operation === 'reconstructImage') {
+                            resolve(e.data.imageData);
+                        } else {
+                            reject(new Error(e.data.error || 'Worker reconstruction failed'));
+                        }
+                    };
+
+                    worker.postMessage({
+                        processedRgbData: processedRgbData.buffer,
+                        originalWidth,
+                        originalHeight,
+                        operation: 'reconstructImage'
+                    }, [processedRgbData.buffer]);
+                });
+
+                worker.terminate();
+
+                const reconstructionTime = performance.now() - reconstructionStartTime;
+                const totalTime = performance.now() - startTime;
+
+                // Store final timing data
+                debugData.timingData.reconstruction = reconstructionTime;
+                debugData.timingData.total = totalTime;
+                debugData.processedData = processedRgbData;
+                debugData.reconstructedImageData = newImageData;
+
+                // Step 5: Display result
+                const ctx = filteredCanvas.getContext('2d');
+                ctx.putImageData(newImageData, 0, 0);
+
+                log(`Chain processing completed in ${chainTime.toFixed(1)}ms`);
+                log(`Reconstruction completed in ${reconstructionTime.toFixed(1)}ms`);
+                log(`Total processing time: ${totalTime.toFixed(1)}ms`);
+                downloadBtn.style.display = 'inline-block';
+
+                // Update debug visualizations with complete data
+                updateDebugVisualizations();
+
+            } catch (error) {
+                log(`Error: ${error.message}`);
+                alert(`An error occurred: ${error.message}`);
+            } finally {
+                processBtn.disabled = false;
+                processBtn.textContent = "Process Chain";
+            }
+        });
+
+        // --- Browser-side Custom Filter Processing ---
+
+        async function applyCustomFilterInBrowser(data, filter) {
+            const dataArray = new Uint8ClampedArray(data);
+
+            switch (filter.type) {
+                case 'bit_crush':
+                    return applyBitCrush(dataArray, filter.params);
+                case 'data_mosh':
+                    return applyDataMosh(dataArray, filter.params);
+                case 'glitch_blocks':
+                    return applyGlitchBlocks(dataArray, filter.params);
+                case 'channel_swap':
+                    return applyChannelSwap(dataArray, filter.params);
+                default:
+                    return dataArray;
+            }
+        }
+
+        function applyBitCrush(data, params) {
+            const bits = parseInt(params.bits);
+            const maxVal = (2 ** bits) - 1;
+            const result = new Uint8ClampedArray(data.length);
+
+            for (let i = 0; i < data.length; i++) {
+                result[i] = Math.round(data[i] / 255.0 * maxVal) / maxVal * 255.0;
+            }
+
+            return result;
+        }
+
+        function applyDataMosh(data, params) {
+            const intensity = parseFloat(params.intensity);
+            const result = new Uint8ClampedArray(data);
+            const numSwaps = Math.floor(data.length * intensity);
+
+            for (let i = 0; i < numSwaps; i++) {
+                const idx1 = Math.floor(Math.random() * data.length);
+                const idx2 = Math.floor(Math.random() * data.length);
+                const temp = result[idx1];
+                result[idx1] = result[idx2];
+                result[idx2] = temp;
+            }
+
+            return result;
+        }
+
+        function applyGlitchBlocks(data, params) {
+            const blockSize = parseInt(params.block_size);
+            const intensity = parseFloat(params.intensity);
+            const result = new Uint8ClampedArray(data);
+
+            const numBlocks = Math.floor(data.length / (blockSize * 3));
+            const numCorrupt = Math.floor(numBlocks * intensity);
+
+            for (let i = 0; i < numCorrupt; i++) {
+                const blockIdx = Math.floor(Math.random() * numBlocks);
+                const startByte = blockIdx * blockSize * 3;
+
+                if (startByte + blockSize * 3 <= data.length) {
+                    for (let j = 0; j < blockSize * 3; j++) {
+                        result[startByte + j] = Math.floor(Math.random() * 256);
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        function applyChannelSwap(data, params) {
+            const intensity = parseFloat(params.intensity);
+            const result = new Uint8ClampedArray(data);
+            const pixels = result.length / 3;
+            const numSwaps = Math.floor(pixels * intensity);
+
+            for (let i = 0; i < numSwaps; i++) {
+                const pixelIdx = Math.floor(Math.random() * pixels) * 3;
+                const r = result[pixelIdx];
+                const g = result[pixelIdx + 1];
+                const b = result[pixelIdx + 2];
+
+                // Randomly shuffle RGB channels
+                const channels = [r, g, b];
+                channels.sort(() => Math.random() - 0.5);
+
+                result[pixelIdx] = channels[0];
+                result[pixelIdx + 1] = channels[1];
+                result[pixelIdx + 2] = channels[2];
+            }
+
+            return result;
+        }
+
+        // --- Batch FFmpeg Processing ---
+
+        async function processFFmpegFilterChain(data, filters) {
+            try {
+                // Convert to float audio data
+                const floatArray = new Float32Array(data.length);
+                for (let i = 0; i < data.length; i++) {
+                    floatArray[i] = (data[i] / 127.5) - 1.0;
+                }
+
+                // Build filter chain string for FFmpeg
+                const filterStrings = filters.map(filter => {
+                    const params = Object.entries(filter.params)
+                        .map(([key, value]) => `${key}=${value}`)
+                        .join(':');
+                    return `${filter.type}=${params}`;
+                });
+                const combinedFilter = filterStrings.join(',');
+
+                log(`FFmpeg filter chain: ${combinedFilter}`);
+
+                // Prepare data for FFmpeg
+                const floatBytes = floatArray.buffer;
+
+                // Send to server for batch FFmpeg processing
+                const formData = new FormData();
+                formData.append('pixel_data', new Blob([floatBytes]), 'audio.raw');
+                formData.append('filter_chain', combinedFilter);
+
+                const response = await fetch('/process-chain/', { method: 'POST', body: formData });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Server error: ${response.status} - ${JSON.parse(errorText).detail}`);
+                }
+
+                const processedBuffer = await response.arrayBuffer();
+                const processedFloatArray = new Float32Array(processedBuffer);
+
+                // Convert back to pixel data
+                const result = new Uint8ClampedArray(processedFloatArray.length);
+                for (let i = 0; i < result.length; i++) {
+                    result[i] = Math.max(0, Math.min(255, Math.round((processedFloatArray[i] + 1.0) * 127.5)));
+                }
+
+                return result;
+
+            } catch (error) {
+                log(`FFmpeg batch processing failed: ${error.message}`);
+                throw error;
+            }
+        }
+
+        downloadBtn.addEventListener('click', () => {
+            const dataUrl = filteredCanvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = 'filtered-image.png';
+            link.href = dataUrl;
+            link.click();
+            log("Resulting image downloaded.");
+        });
+
+        // --- Debug Visualizer Functions ---
+
+        // Debug data storage
+        let debugData = {
+            originalImageData: null,
+            rgbData: null,
+            processedData: null,
+            reconstructedImageData: null,
+            timingData: {},
+            compressionData: {},
+            cacheHit: false
+        };
+
+        // Prevent recursion and track debug state
+        let isUpdatingDebug = false;
+        let debugEnabled = true; // Safety toggle
+
+        // Format bytes for display
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Update data flow stage cards
+        function updateDataFlowStages() {
+            if (debugData.originalImageData) {
+                document.querySelector('#stage-original .data-size').textContent =
+                    formatBytes(debugData.originalImageData.width * debugData.originalImageData.height * 4);
+            }
+            if (debugData.rgbData) {
+                document.querySelector('#stage-rgb .data-size').textContent =
+                    formatBytes(debugData.rgbData.length);
+            }
+            if (debugData.processedData) {
+                document.querySelector('#stage-processed .data-size').textContent =
+                    formatBytes(debugData.processedData.length);
+            }
+            if (debugData.reconstructedImageData) {
+                document.querySelector('#stage-reconstructed .data-size').textContent =
+                    formatBytes(debugData.reconstructedImageData.width * debugData.reconstructedImageData.height * 4);
+            }
+
+            // Update cache status
+            const cacheStatus = debugData.cacheHit ? 'Hit ✓' : 'Miss -';
+            document.getElementById('cache-status').textContent = cacheStatus;
+            document.getElementById('cache-status').style.color = debugData.cacheHit ? '#28a745' : '#dc3545';
+        }
+
+        // Draw pipeline visualization
+        function drawPipeline() {
+            const canvas = document.getElementById('pipeline-canvas');
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+
+            // Clear canvas
+            ctx.clearRect(0, 0, width, height);
+
+            // Draw pipeline stages
+            const stages = [
+                { x: 50, y: 100, label: 'Image', active: !!debugData.originalImageData },
+                { x: 250, y: 100, label: 'RGB Extract', active: !!debugData.rgbData },
+                { x: 450, y: 100, label: 'FFmpeg', active: !!debugData.processedData },
+                { x: 650, y: 100, label: 'Reconstruct', active: !!debugData.reconstructedImageData }
+            ];
+
+            // Draw connections
+            ctx.strokeStyle = '#dee2e6';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            for (let i = 0; i < stages.length - 1; i++) {
+                ctx.moveTo(stages[i].x + 30, stages[i].y);
+                ctx.lineTo(stages[i + 1].x - 30, stages[i + 1].y);
+            }
+            ctx.stroke();
+
+            // Draw stages
+            stages.forEach(stage => {
+                // Circle
+                ctx.beginPath();
+                ctx.arc(stage.x, stage.y, 25, 0, 2 * Math.PI);
+                ctx.fillStyle = stage.active ? '#007bff' : '#e9ecef';
+                ctx.fill();
+                ctx.strokeStyle = stage.active ? '#0056b3' : '#adb5bd';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Label
+                ctx.fillStyle = '#343a40';
+                ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(stage.label, stage.x, stage.y + 45);
+            });
+
+            // Draw data flow arrow
+            if (stages.some(s => s.active)) {
+                const lastActive = stages.filter(s => s.active).length - 1;
+                if (lastActive >= 0) {
+                    ctx.strokeStyle = '#28a745';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(stages[lastActive].x + 30, stages[lastActive].y);
+                    ctx.lineTo(stages[lastActive].x + 60, stages[lastActive].y);
+                    ctx.stroke();
+
+                    // Arrowhead
+                    ctx.beginPath();
+                    ctx.moveTo(stages[lastActive].x + 55, stages[lastActive].y - 5);
+                    ctx.lineTo(stages[lastActive].x + 60, stages[lastActive].y);
+                    ctx.lineTo(stages[lastActive].x + 55, stages[lastActive].y + 5);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // Draw waveform visualization
+        function drawWaveform(canvasId, data) {
+            if (!debugEnabled) return;
+
+            try {
+                const canvas = document.getElementById(canvasId);
+                if (!canvas || !data || data.length === 0) return;
+
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return;
+
+                const width = canvas.width;
+                const height = canvas.height;
+
+                // Clear canvas
+                ctx.clearRect(0, 0, width, height);
+
+                // Draw background grid
+                ctx.strokeStyle = 'rgba(240, 147, 251, 0.1)';
+                ctx.lineWidth = 1;
+                for (let i = 0; i <= 4; i++) {
+                    const y = (height / 4) * i;
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(width, y);
+                    ctx.stroke();
+                }
+
+                // Draw center line
+                ctx.strokeStyle = 'rgba(240, 147, 251, 0.2)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(0, height / 2);
+                ctx.lineTo(width, height / 2);
+                ctx.stroke();
+
+                // Limit samples to prevent performance issues
+                const maxSamples = Math.min(data.length, 500);
+                const step = Math.max(1, Math.floor(data.length / maxSamples));
+
+                // Choose color based on canvas ID
+                let waveformColor;
+                if (canvasId === 'waveform-original') {
+                    waveformColor = '#00f2fe'; // Cyan for original
+                } else if (canvasId === 'waveform-processed') {
+                    waveformColor = '#f093fb'; // Pink for processed
+                } else {
+                    waveformColor = '#4facfe'; // Blue default
+                }
+
+                // Draw waveform with glow effect
+                ctx.shadowColor = waveformColor;
+                ctx.shadowBlur = 10;
+                ctx.strokeStyle = waveformColor;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+
+                for (let i = 0; i < maxSamples; i++) {
+                    const dataIndex = Math.min(i * step, data.length - 1);
+                    const value = (data[dataIndex] / 255.0) - 0.5; // Convert to -0.5 to 0.5 range
+                    const x = (i / maxSamples) * width;
+                    const y = height / 2 - (value * height * 0.8);
+
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+
+                ctx.stroke();
+                ctx.shadowBlur = 0; // Reset shadow
+
+            } catch (error) {
+                console.error(`Waveform drawing error for ${canvasId}:`, error);
+            }
+        }
+
+        // Update data inspector
+        function updateDataInspector() {
+            if (!debugEnabled || !debugData.rgbData) return;
+
+            try {
+                const data = debugData.rgbData;
+                if (!data || data.length === 0) return;
+
+                // Sample data for statistics to prevent performance issues with large arrays
+                const sampleSize = Math.min(data.length, 10000);
+                const step = Math.max(1, Math.floor(data.length / sampleSize));
+                const sampledData = [];
+                for (let i = 0; i < data.length; i += step) {
+                    sampledData.push(data[i]);
+                }
+
+                // Calculate statistics on sampled data
+                const min = Math.min(...sampledData);
+                const max = Math.max(...sampledData);
+                const mean = sampledData.reduce((a, b) => a + b, 0) / sampledData.length;
+                const variance = sampledData.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / sampledData.length;
+                const std = Math.sqrt(variance);
+
+                // Update statistics display
+                const minEl = document.getElementById('stat-min');
+                const maxEl = document.getElementById('stat-max');
+                const meanEl = document.getElementById('stat-mean');
+                const stdEl = document.getElementById('stat-std');
+
+                if (minEl) minEl.textContent = min;
+                if (maxEl) maxEl.textContent = max;
+                if (meanEl) meanEl.textContent = mean.toFixed(2);
+                if (stdEl) stdEl.textContent = std.toFixed(2);
+
+                // Update hex viewer (first 64 bytes)
+                const hexData = Array.from(data.slice(0, 64))
+                    .map(b => b.toString(16).padStart(2, '0').toUpperCase())
+                    .join(' ');
+                const hexViewer = document.getElementById('hex-viewer');
+                if (hexViewer) {
+                    hexViewer.textContent = hexData || 'No data available';
+                }
+
+                // Draw channel histogram
+                drawChannelHistogram();
+            } catch (error) {
+                console.error('Data inspector error:', error);
+            }
+        }
+
+        // Draw RGB channel histogram
+        function drawChannelHistogram() {
+            if (!debugEnabled) return;
+
+            try {
+                const canvas = document.getElementById('channel-histogram');
+                if (!canvas || !debugData.rgbData) return;
+
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return;
+
+                const width = canvas.width;
+                const height = canvas.height;
+
+                // Clear canvas
+                ctx.clearRect(0, 0, width, height);
+
+                const data = debugData.rgbData;
+                if (!data || data.length < 3) return;
+
+                // Sample data for histogram to prevent performance issues
+                const sampleStep = Math.max(1, Math.floor(data.length / 10000));
+                const rChannel = [];
+                const gChannel = [];
+                const bChannel = [];
+
+                for (let i = 0; i < data.length - 2; i += 3 * sampleStep) {
+                    rChannel.push(data[i] || 0);
+                    gChannel.push(data[i + 1] || 0);
+                    bChannel.push(data[i + 2] || 0);
+                }
+
+                // Calculate histograms
+                const histogram = (channel, color) => {
+                    const bins = new Array(16).fill(0);
+                    channel.forEach(value => {
+                        const binIndex = Math.floor(Math.min(255, Math.max(0, value)) / 16);
+                        bins[binIndex]++;
+                    });
+                    return { bins, color };
+                };
+
+                const rHist = histogram(rChannel, '#ff4444');
+                const gHist = histogram(gChannel, '#44ff44');
+                const bHist = histogram(bChannel, '#4444ff');
+
+                const maxCount = Math.max(
+                    ...rHist.bins, ...gHist.bins, ...bHist.bins, 1
+                );
+
+                // Draw histograms
+                const barWidth = width / 16;
+                const drawHist = (hist, offset) => {
+                    ctx.fillStyle = hist.color + '80'; // Add transparency
+                    hist.bins.forEach((count, i) => {
+                        const barHeight = (count / maxCount) * height * 0.8;
+                        const x = i * barWidth;
+                        const y = height - barHeight - offset;
+                        ctx.fillRect(x + 1, y, barWidth - 2, barHeight);
+                    });
+                };
+
+                drawHist(rHist, 0);
+                drawHist(gHist, height * 0.02);
+                drawHist(bHist, height * 0.04);
+            } catch (error) {
+                console.error('Channel histogram error:', error);
+            }
+        }
+
+        // Update performance display
+        function updatePerformanceDisplay() {
+            const timing = debugData.timingData;
+
+            document.getElementById('time-extraction').textContent = timing.extraction ? `${timing.extraction.toFixed(1)}ms` : '-';
+            document.getElementById('time-compression').textContent = timing.compression ? `${timing.compression.toFixed(1)}ms` : '-';
+            document.getElementById('time-network').textContent = timing.network ? `${timing.network.toFixed(1)}ms` : '-';
+            document.getElementById('time-server').textContent = timing.server ? `${timing.server.toFixed(1)}ms` : '-';
+            document.getElementById('time-reconstruction').textContent = timing.reconstruction ? `${timing.reconstruction.toFixed(1)}ms` : '-';
+            document.getElementById('time-total').textContent = timing.total ? `${timing.total.toFixed(1)}ms` : '-';
+
+            // Update memory usage
+            document.getElementById('memory-original').textContent = debugData.originalImageData ?
+                formatBytes(debugData.originalImageData.width * debugData.originalImageData.height * 4) : '-';
+            document.getElementById('memory-rgb').textContent = debugData.rgbData ?
+                formatBytes(debugData.rgbData.length) : '-';
+            document.getElementById('memory-processed').textContent = debugData.processedData ?
+                formatBytes(debugData.processedData.length) : '-';
+        }
+
+        // Main debug update function
+        function updateDebugVisualizations() {
+            // Guard conditions to prevent recursion and errors
+            if (!debugEnabled || isUpdatingDebug) {
+                return;
+            }
+
+            try {
+                isUpdatingDebug = true;
+
+                updateDataFlowStages();
+                drawPipeline();
+                updateDataInspector();
+                updatePerformanceDisplay();
+
+                // Update waveforms if data is available
+                if (debugData.rgbData && debugData.rgbData.length > 0) {
+                    drawWaveform('waveform-original', debugData.rgbData);
+                }
+                if (debugData.processedData && debugData.processedData.length > 0) {
+                    drawWaveform('waveform-processed', debugData.processedData);
+                }
+            } catch (error) {
+                console.error('Debug visualization error:', error);
+                // Disable debug on error to prevent repeated failures
+                debugEnabled = false;
+            } finally {
+                isUpdatingDebug = false;
+            }
+        }
+
+        // Debug Panel Tab Switching
+        const debugTabs = document.querySelectorAll('.debug-tab');
+        const debugTabContents = document.querySelectorAll('.debug-tab-content');
+        const debugToggleBtn = document.getElementById('debug-toggle');
+
+        debugTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                const targetTab = tab.getAttribute('data-tab');
+
+                // Remove active class from all tabs and contents
+                debugTabs.forEach(t => t.classList.remove('active'));
+                debugTabContents.forEach(content => content.classList.remove('active'));
+
+                // Add active class to clicked tab and corresponding content
+                tab.classList.add('active');
+                document.getElementById(targetTab).classList.add('active');
+            });
+        });
+
+        // Debug toggle functionality
+        debugToggleBtn.addEventListener('click', () => {
+            debugEnabled = !debugEnabled;
+
+            if (debugEnabled) {
+                debugToggleBtn.textContent = '🔧 Debug: ON';
+                debugToggleBtn.classList.remove('disabled');
+                // Re-enable debug visualizations
+                updateDebugVisualizations();
+            } else {
+                debugToggleBtn.textContent = '🔧 Debug: OFF';
+                debugToggleBtn.classList.add('disabled');
+                // Clear debug visualizations when disabled
+                const canvases = document.querySelectorAll('.debug-panel canvas');
+                canvases.forEach(canvas => {
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    }
+                });
+            }
+        });
+
+        // Initialize UI
+        addFilterBtn.addEventListener('click', addFilterToChain);
+        updateChainSummary(); // Initial call to show empty state
+    </script>
+</body>
+</html>
